@@ -58,9 +58,22 @@ const enforced_config = {
 	root: true
 };
 
-/** @return {import('vite').Plugin[]} */
-export function sveltekit() {
-	return [...svelte(), kit()];
+/**
+ * @param {{
+ *   compilerOptions: import('svelte/types/compiler/interfaces').CompileOptions
+ * }} [options]
+ * @return {import('vite').Plugin[]}
+ */
+export function sveltekit(options) {
+	return [
+		...svelte({
+			compilerOptions: {
+				hydratable: true,
+				...options?.compilerOptions
+			}
+		}),
+		kit()
+	];
 }
 
 /**
