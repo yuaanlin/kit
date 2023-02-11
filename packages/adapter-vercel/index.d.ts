@@ -4,7 +4,7 @@ export default function plugin(config?: Config): Adapter;
 
 export interface ServerlessConfig {
 	/**
-	 * Whether to use [Edge Functions](https://vercel.com/docs/concepts/functions/edge-functions) or [Serverless Functions](https://vercel.com/docs/concepts/functions/serverless-functions)
+	 * Specifies which runtime will be used to execute the Serverless Function.
 	 * @default 'nodejs18.x'
 	 */
 	runtime?: 'nodejs16.x' | 'nodejs18.x';
