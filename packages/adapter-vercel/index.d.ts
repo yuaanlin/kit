@@ -37,7 +37,7 @@ export interface ServerlessConfig {
 		 */
 		expiration: number | false;
 		/**
-		 * Option group number of the asset. Assets with the same group number will all be re-validated at the same time.
+		 * Optional group number of the asset. Assets with the same group number will all be re-validated at the same time.
 		 */
 		group?: number;
 		/**
