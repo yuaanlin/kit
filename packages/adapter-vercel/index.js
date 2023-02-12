@@ -141,7 +141,8 @@ const plugin = function (defaults = {}) {
 							runtime: config.runtime,
 							regions: config.regions,
 							envVarsInUse: [...envVarsInUse],
-							entrypoint: 'index.js'
+							entrypoint: 'index.js',
+							cron: config.cron
 						},
 						null,
 						'\t'
@@ -270,7 +271,8 @@ function hash_config(config) {
 		config.isr?.expiration ?? '',
 		config.isr?.group ?? '',
 		config.isr?.bypassToken ?? '',
-		config.isr?.allowQuery ?? ''
+		config.isr?.allowQuery ?? '',
+		config.cron ?? ''
 	].join('/');
 }
 
@@ -450,7 +452,8 @@ async function create_function_bundle(builder, entry, dir, config) {
 				memory: config.memory,
 				maxDuration: config.maxDuration,
 				handler: path.relative(base + ancestor, entry),
-				launcherType: 'Nodejs'
+				launcherType: 'Nodejs',
+				cron: config.cron
 			},
 			null,
 			'\t'
