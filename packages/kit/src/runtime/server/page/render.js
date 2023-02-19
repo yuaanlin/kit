@@ -1,7 +1,7 @@
 import * as devalue from 'devalue';
 import { readable, writable } from 'svelte/store';
 import { DEV } from 'esm-env';
-import { assets, base } from '__sveltekit/paths';
+import * as paths from '__sveltekit/paths';
 import { hash } from '../../hash.js';
 import { serialize_data } from './serialize_data.js';
 import { s } from '../../../utils/misc.js';
@@ -71,12 +71,45 @@ export async function render_response({
 	// TODO if we add a client entry point one day, we will need to include inline_styles with the entry, otherwise stylesheets will be linked even if they are below inlineStyleThreshold
 	const inline_styles = new Map();
 
-	let rendered;
+	const csp = new Csp(options.csp, {
+		prerender: !!state.prerendering
+	});
+
+	const assets = resolve_assets(event.url.pathname, !!state.prerendering?.fallback);
+
+	/** @param {string} path */
+	const prefixed = (path) => {
+		if (path.startsWith('/')) {
+			// Vite makes the start script available through the base path and without it.
+			// We load it via the base path in order to support remote IDE environments which proxy
+			// all URLs under the base path during development.
+			return paths.base + path;
+		}
+		return `${assets.resolved}/${path}`;
+	};
 
 	const form_value =
 		action_result?.type === 'success' || action_result?.type === 'failure'
 			? action_result.data ?? null
 			: null;
+
+	const global = `__sveltekit_${options.version_hash}`;
+
+	const headers = new Headers({
+		'x-sveltekit-page': 'true',
+		'content-type': 'text/html'
+	});
+
+	const { data, chunks } = get_data(
+		event,
+		branch.map((b) => b.server_data),
+		global
+	);
+
+	let head = '';
+	let body = '';
+
+	let rendered;
 
 	if (page_config.ssr) {
 		if (__SVELTEKIT_DEV__ && !branch.at(-1)?.node.component) {
@@ -154,52 +187,7 @@ export async function render_response({
 		rendered = { head: '', html: '', css: { code: '', map: null } };
 	}
 
-	/**
-	 * The prefix to use for static assets. Replaces `%sveltekit.assets%` in the template
-	 * @type {string}
-	 */
-	let resolved_assets;
-
-	/**
-	 * An expression that will evaluate in the client to determine the resolved asset path
-	 */
-	let asset_expression;
-
-	if (assets) {
-		// if an asset path is specified, use it
-		resolved_assets = assets;
-		asset_expression = s(assets);
-	} else if (state.prerendering?.fallback) {
-		// if we're creating a fallback page, asset paths need to be root-relative
-		resolved_assets = base;
-		asset_expression = s(base);
-	} else {
-		// otherwise we want asset paths to be relative to the page, so that they
-		// will work in odd contexts like IPFS, the internet archive, and so on
-		const segments = event.url.pathname.slice(base.length).split('/').slice(2);
-		resolved_assets = segments.length > 0 ? segments.map(() => '..').join('/') : '.';
-		asset_expression = `new URL(${s(
-			resolved_assets
-		)}, location.href).pathname.replace(/^\\\/$/, '')`;
-	}
-
-	let head = '';
-	let body = rendered.html;
-
-	const csp = new Csp(options.csp, {
-		prerender: !!state.prerendering
-	});
-
-	/** @param {string} path */
-	const prefixed = (path) => {
-		if (path.startsWith('/')) {
-			// Vite makes the start script available through the base path and without it.
-			// We load it via the base path in order to support remote IDE environments which proxy
-			// all URLs under the base path during development.
-			return base + path;
-		}
-		return `${resolved_assets}/${path}`;
-	};
+	body += rendered.html;
 
 	if (inline_styles.size > 0) {
 		const content = Array.from(inline_styles.values()).join('\n');
@@ -248,14 +236,6 @@ export async function render_response({
 		}
 	}
 
-	const global = `__sveltekit_${options.version_hash}`;
-
-	const { data, chunks } = get_data(
-		event,
-		branch.map((b) => b.server_data),
-		global
-	);
-
 	if (page_config.ssr && page_config.csr) {
 		body += `\n\t\t\t${fetched
 			.map((item) =>
@@ -282,7 +262,7 @@ export async function render_response({
 
 		const properties = [
 			`env: ${s(public_env)}`,
-			`assets: ${asset_expression}`,
+			`assets: ${assets.expression}`,
 			`element: document.currentScript.parentElement`
 		];
 
@@ -373,11 +353,7 @@ export async function render_response({
 		}>${init_app}</script>\n\t\t`;
 	}
 
-	const headers = new Headers({
-		'x-sveltekit-page': 'true',
-		'content-type': 'text/html'
-	});
-
+	// add CSP and Link headers
 	if (state.prerendering) {
 		// TODO read headers set with setHeaders and convert into http-equiv where possible
 		const http_equiv = [];
@@ -415,8 +391,8 @@ export async function render_response({
 	const html = options.templates.app({
 		head,
 		body,
-		assets: resolved_assets,
-		nonce: /** @type {string} */ (csp.nonce),
+		assets: assets.resolved,
+		nonce: csp.nonce,
 		env: public_env
 	});
 
@@ -459,6 +435,43 @@ export async function render_response({
 		status,
 		headers
 	});
+}
+
+/**
+ * @typedef {Object} Assets
+ * @property {string} resolved - the path to the assets directory, relative to the current page
+ * @property {string} expression - an JavaScript expression that evaluates to the path to the assets directory
+ *
+ * @param {string} pathname
+ * @param {boolean} is_fallback
+ * @returns {Assets}
+ */
+function resolve_assets(pathname, is_fallback) {
+	if (paths.assets) {
+		// if an asset path is specified, use it
+		return {
+			resolved: paths.assets,
+			expression: s(paths.assets)
+		};
+	}
+
+	if (is_fallback) {
+		// if we're creating a fallback page, asset paths need to be root-relative
+		return {
+			resolved: paths.base,
+			expression: s(paths.base)
+		};
+	}
+
+	// otherwise we want asset paths to be relative to the page, so that they
+	// will work in odd contexts like IPFS, the internet archive, and so on
+	const segments = pathname.slice(paths.base.length).split('/').slice(2);
+	const resolved = segments.length > 0 ? segments.map(() => '..').join('/') : '.';
+
+	return {
+		resolved,
+		expression: `new URL(${s(resolved)}, location.href).pathname.replace(/^\\\/$/, '')`
+	};
 }
 
 /**
