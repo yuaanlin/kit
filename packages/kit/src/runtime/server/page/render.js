@@ -420,16 +420,11 @@ export async function render_response({
 		env: public_env
 	});
 
-	// TODO flush chunks as early as we can
 	const transformed =
 		(await resolve_opts.transformPageChunk({
 			html,
 			done: true
 		})) || '';
-
-	if (!chunks) {
-		headers.set('etag', `"${hash(transformed)}"`);
-	}
 
 	if (DEV && page_config.csr) {
 		if (transformed.split('<!--').length < html.split('<!--').length) {
@@ -441,27 +436,29 @@ export async function render_response({
 		}
 	}
 
-	return !chunks
-		? text(transformed, {
-				status,
-				headers
-		  })
-		: new Response(
-				new ReadableStream({
-					async start(controller) {
-						controller.enqueue(transformed);
-						for await (const chunk of chunks) {
-							controller.enqueue(chunk);
-						}
-						controller.close();
-					}
-				}),
-				{
-					headers: {
-						'content-type': 'text/html'
-					}
+	if (chunks) {
+		const body = new ReadableStream({
+			async start(controller) {
+				controller.enqueue(transformed);
+				for await (const chunk of chunks) {
+					controller.enqueue(chunk);
 				}
-		  );
+				controller.close();
+			}
+		});
+
+		return new Response(body, {
+			headers
+		});
+	}
+
+	// if no streaming, we can set `etag` (and `content-length`, via `text(...)`)
+	headers.set('etag', `"${hash(transformed)}"`);
+
+	return text(transformed, {
+		status,
+		headers
+	});
 }
 
 /**
