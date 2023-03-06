@@ -23,29 +23,22 @@ function defer() {
  * }}
  */
 export function create_async_iterator() {
-	let deferred = [defer()];
+	let deferred = defer();
 
 	return {
 		iterator: {
 			[Symbol.asyncIterator]() {
 				return {
-					next: async () => {
-						const next = await deferred[0].promise;
-						if (!next.done) deferred.shift();
-						return next;
-					}
+					next: () => deferred.promise
 				};
 			}
 		},
 		push: (value) => {
-			deferred[deferred.length - 1].fulfil({
-				value,
-				done: false
-			});
-			deferred.push(defer());
+			deferred.fulfil({ value, done: false });
+			deferred = defer();
 		},
 		done: () => {
-			deferred[deferred.length - 1].fulfil({ done: true });
+			deferred.fulfil({ done: true });
 		}
 	};
 }
