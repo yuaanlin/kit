@@ -12,6 +12,7 @@ import { public_env } from '../../shared-server.js';
 import { text } from '../../../exports/index.js';
 import { create_async_iterator } from '../../../utils/streaming.js';
 import { SVELTE_KIT_ASSETS } from '../../../constants.js';
+import { compact } from '../../../utils/array.js';
 
 // TODO rename this function/module
 
@@ -120,7 +121,7 @@ export async function render_response({
 				navigating: writable(null),
 				updated
 			},
-			constructors: await Promise.all(branch.map(({ node }) => node.component())),
+			constructors: await Promise.all(compact(branch).map(({ node }) => node.component())),
 			form: form_value
 		};
 
@@ -128,9 +129,10 @@ export async function render_response({
 
 		// props_n (instead of props[n]) makes it easy to avoid
 		// unnecessary updates for layout components
-		for (let i = 0; i < branch.length; i += 1) {
-			data = { ...data, ...branch[i].data };
-			props[`data_${i}`] = data;
+		for (let i = 0, p = 0; i < branch.length; i++) {
+			if (!branch[i]) continue;
+			data = { ...data, ...(branch[i].data || {}) };
+			props[`data_${p++}`] = data;
 		}
 
 		props.page = {
@@ -179,7 +181,9 @@ export async function render_response({
 			}
 		}
 
-		for (const { node } of branch) {
+		for (const b of branch) {
+			if (!b) continue;
+			const { node } = b;
 			for (const url of node.imports) modulepreloads.add(url);
 			for (const url of node.stylesheets) stylesheets.add(url);
 			for (const url of node.fonts) fonts.add(url);
@@ -262,7 +266,7 @@ export async function render_response({
 	const { data, chunks } = get_data(
 		event,
 		options,
-		branch.map((b) => b.server_data),
+		branch.map((b) => b?.server_data),
 		global
 	);
 
@@ -338,7 +342,7 @@ export async function render_response({
 			}
 
 			const hydrate = [
-				`node_ids: [${branch.map(({ node }) => node.index).join(', ')}]`,
+				`node_ids: [${branch.map((b) => b?.node.index ?? '').join(',')}]`,
 				`data`,
 				`form: ${serialized.form}`,
 				`error: ${serialized.error}`

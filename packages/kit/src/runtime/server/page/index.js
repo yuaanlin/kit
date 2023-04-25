@@ -227,11 +227,11 @@ export async function render_page(event, page, options, manifest, state, resolve
 					while (i--) {
 						if (page.errors[i]) {
 							const index = /** @type {number} */ (page.errors[i]);
-							const node = await manifest._.nodes[index]();
 
 							let j = i;
 							while (!branch[j]) j -= 1;
 
+							const node = await manifest._.nodes[index]();
 							return await render_response({
 								event,
 								options,
@@ -294,7 +294,7 @@ export async function render_page(event, page, options, manifest, state, resolve
 			},
 			status,
 			error: null,
-			branch: compact(branch),
+			branch,
 			action_result,
 			fetched
 		});

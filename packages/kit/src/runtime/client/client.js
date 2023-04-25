@@ -1745,7 +1745,7 @@ export function create_client(app, target) {
 					const layouts = parsed_route.layouts;
 					for (let i = 0; i < layouts.length; i++) {
 						if (!layouts[i]) {
-							branch.splice(i, 0, undefined);
+							// branch.splice(i, 0, undefined);
 						}
 					}
 				}
