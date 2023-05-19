@@ -61,7 +61,7 @@ for (const [key, expected] of Object.entries(tests)) {
 	});
 }
 
-const simple_tests = [
+const exec_tests = [
 	{
 		route: '/blog/[[slug]]/sub[[param]]',
 		path: '/blog/sub',
@@ -201,10 +201,35 @@ const simple_tests = [
 		route: '/[[slug1=doesntmatch]]/[slug2=matches]/[slug3]',
 		path: '/a/b/c',
 		expected: undefined
+	},
+	{
+		route: '/[[lang=doesntmatch]]/[asset=matches]/[[categoryType]]/[...categories]',
+		path: '/music',
+		expected: { asset: 'music', categories: '' }
+	},
+	{
+		route: '/[[lang=doesntmatch]]/[asset=matches]/[[categoryType]]/[...categories]',
+		path: '/music/genre',
+		expected: { asset: 'music', categoryType: 'genre', categories: '' }
+	},
+	{
+		route: '/[[lang=doesntmatch]]/[asset=matches]/[[categoryType]]/[...categories]',
+		path: '/music/genre/rock',
+		expected: { asset: 'music', categoryType: 'genre', categories: 'rock' }
+	},
+	{
+		route: '/[[lang=doesntmatch]]/[asset=matches]/[[categoryType]]/[...categories]',
+		path: '/sfx/category/car/crash',
+		expected: { asset: 'sfx', categoryType: 'category', categories: 'car/crash' }
+	},
+	{
+		route: '/[[lang=matches]]/[asset=matches]/[[categoryType]]/[...categories]',
+		path: '/es/sfx/category/car/crash',
+		expected: { lang: 'es', asset: 'sfx', categoryType: 'category', categories: 'car/crash' }
 	}
 ];
 
-for (const { path, route, expected } of simple_tests) {
+for (const { path, route, expected } of exec_tests) {
 	test(`exec extracts params correctly for ${path} from ${route}`, () => {
 		const { pattern, params } = parse_route_id(route);
 		const match = pattern.exec(path);
@@ -213,64 +238,6 @@ for (const { path, route, expected } of simple_tests) {
 			matches: () => true,
 			doesntmatch: () => false
 		});
-		expect(actual).toEqual(expected);
-	});
-}
-
-const complex_tests = [
-	{
-		route: '/[[lang=lang]]/[asset=asset]/[[categoryType]]/[...categories]',
-		path: '/music',
-		expected: { asset: 'music', categories: '' },
-		matchers: {
-			lang: () => false,
-			asset: () => true
-		}
-	},
-	{
-		route: '/[[lang=lang]]/[asset=asset]/[[categoryType]]/[...categories]',
-		path: '/music/genre',
-		expected: { asset: 'music', categoryType: 'genre', categories: '' },
-		matchers: {
-			lang: () => false,
-			asset: () => true
-		}
-	},
-	{
-		route: '/[[lang=lang]]/[asset=asset]/[[categoryType]]/[...categories]',
-		path: '/music/genre/rock',
-		expected: { asset: 'music', categoryType: 'genre', categories: 'rock' },
-		matchers: {
-			lang: () => false,
-			asset: () => true
-		}
-	},
-	{
-		route: '/[[lang=lang]]/[asset=asset]/[[categoryType]]/[...categories]',
-		path: '/sfx/category/car/crash',
-		expected: { asset: 'sfx', categoryType: 'category', categories: 'car/crash' },
-		matchers: {
-			lang: () => false,
-			asset: () => true
-		}
-	},
-	{
-		route: '/[[lang=lang]]/[asset=asset]/[[categoryType]]/[...categories]',
-		path: '/es/sfx/category/car/crash',
-		expected: { lang: 'es', asset: 'sfx', categoryType: 'category', categories: 'car/crash' },
-		matchers: {
-			lang: () => true,
-			asset: () => true
-		}
-	}
-];
-
-for (const { path, route, expected, matchers } of complex_tests) {
-	test(`exec extracts params correctly for ${path} from ${route}`, () => {
-		const { pattern, params } = parse_route_id(route);
-		const match = pattern.exec(path);
-		if (!match) throw new Error(`Failed to match ${path}`);
-		const actual = exec(match, params, matchers);
 		expect(actual).toEqual(expected);
 	});
 }
