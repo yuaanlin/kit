@@ -1,5 +1,7 @@
 import colors from 'kleur';
 import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import prompts from 'prompts';
 import glob from 'tiny-glob/sync.js';
 import { bail, check_git } from '../../utils.js';
@@ -58,9 +60,19 @@ export async function migrate() {
 
 	update_pkg_json();
 
-	// const { default: config } = fs.existsSync('svelte.config.js')
-	// 	? await import(pathToFileURL(path.resolve('svelte.config.js')).href)
-	// 	: { default: {} };
+	try {
+		const { default: config } = fs.existsSync('svelte.config.js')
+			? await import(pathToFileURL(path.resolve('svelte.config.js')).href)
+			: { default: {} };
+
+		if (config?.preprocess && Array.isArray(config.preprocess)) {
+			console.log(
+				'It seems you are using multiple preprocessors. The order in which they are run has changed in Svelte 4 and you might have to adjust them. Read more here: https://svelte.dev/docs/v4-migration-guide#preprocessors'
+			);
+		}
+	} catch (_e) {
+		// do nothing
+	}
 
 	/** @type {string[]} */
 	const svelte_extensions = /* config.extensions ?? - disabled because it would break .svx */ [
