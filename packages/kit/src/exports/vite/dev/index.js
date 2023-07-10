@@ -347,7 +347,18 @@ export async function dev(vite, vite_config, svelte_config) {
 		// while apps load `HttpError` and `Redirect` in Node, without
 		// causing `instanceof` checks to fail
 		const control_module_node = await import('../../../runtime/control.js');
-		const control_module_vite = await vite.ssrLoadModule(`${runtime_base}/control.js`);
+		const control_module_vite = await vite
+			.ssrLoadModule(`${runtime_base}/control.js`)
+			.catch((e) => {
+				// The Vite server may be outdated after a full reload is called.
+				// Track this with it's special error code.
+				if (e?.code === 'ERR_CLOSED_SERVER') {
+					return;
+				}
+				throw e;
+			});
+
+		if (!control_module_vite) return;
 
 		control_module_node.replace_implementations({
 			ActionFailure: control_module_vite.ActionFailure,
