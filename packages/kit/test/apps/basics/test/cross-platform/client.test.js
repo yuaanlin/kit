@@ -646,6 +646,24 @@ test.describe('Routing', () => {
 		expect(await page.textContent('#page-url-hash')).toBe('#target');
 	});
 
+	test('data-sveltekit-preload-data does not block hash navigation', async ({ page }) => {
+		await page.goto('/routing/hashes/a');
+
+		await page.locator('[href="#preload-data"]').dispatchEvent('mousemove');
+		await Promise.all([
+			page.waitForTimeout(100), // wait for preloading to start
+			page.waitForLoadState('networkidle') // wait for preloading to finish
+		]);
+		await page.locator('[href="#preload-data"]').click();
+		expect(await page.textContent('p')).toBe('#preload-data');
+
+		await page.locator('[href="/routing/hashes/a"]').click();
+		expect(await page.textContent('p')).toBe('');
+
+		await page.locator('[href="#preload-data"]').click();
+		expect(await page.textContent('p')).toBe('#preload-data');
+	});
+
 	test('back button returns to previous route when previous route has been navigated to via hash anchor', async ({
 		page,
 		clicknav
