@@ -646,7 +646,9 @@ test.describe('Routing', () => {
 		expect(await page.textContent('#page-url-hash')).toBe('#target');
 	});
 
-	test('data-sveltekit-preload-data does not block hash navigation', async ({ page }) => {
+	test('data-sveltekit-preload-data does not break subsequent hash navigation', async ({
+		page
+	}) => {
 		await page.goto('/routing/hashes/a');
 
 		await page.locator('[href="#preload-data"]').dispatchEvent('mousemove');
