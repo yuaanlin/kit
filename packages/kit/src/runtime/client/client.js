@@ -256,6 +256,7 @@ export function create_client(app, target) {
 					// Don't cache errors, because they might be transient
 					load_cache = null;
 				}
+
 				return result;
 			})
 		};
@@ -604,7 +605,14 @@ export function create_client(app, target) {
 	 */
 	async function load_route({ id, invalidating, url, params, route }) {
 		if (load_cache?.id === id) {
-			return load_cache.promise;
+			return load_cache.promise.then((result) => {
+				// ensure the URL hash is correct when re-using a cached load result
+				if (result.type === 'loaded' && result.props.page) {
+					result.state.url.hash = url.hash;
+					result.props.page.url.hash = url.hash;
+				}
+				return result;
+			});
 		}
 
 		const { errors, layouts, leaf } = route;
