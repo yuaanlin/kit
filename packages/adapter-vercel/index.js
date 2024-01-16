@@ -59,8 +59,8 @@ const plugin = function (defaults = {}) {
 
 			/**
 			 * @param {string} name
-			 * @param {import('./index.js').ServerlessConfig} config
-			 * @param {import('@sveltejs/kit').RouteDefinition<import('./index.js').Config>[]} routes
+			 * @param {import('.').ServerlessConfig} config
+			 * @param {import('@sveltejs/kit').RouteDefinition<import('.').Config>[]} routes
 			 */
 			async function generate_serverless_function(name, config, routes) {
 				const relativePath = path.posix.relative(tmp, builder.getServerDirectory());
@@ -88,7 +88,7 @@ const plugin = function (defaults = {}) {
 
 			/**
 			 * @param {string} name
-			 * @param {import('./index.js').EdgeConfig} config
+			 * @param {import('.').EdgeConfig} config
 			 * @param {import('@sveltejs/kit').RouteDefinition<import('./index.js').EdgeConfig>[]} routes
 			 */
 			async function generate_edge_function(name, config, routes) {
@@ -136,7 +136,7 @@ const plugin = function (defaults = {}) {
 				);
 			}
 
-			/** @type {Map<string, { i: number, config: import('./index.js').Config, routes: import('@sveltejs/kit').RouteDefinition<import('./index.js').Config>[] }>} */
+			/** @type {Map<string, { i: number, config: import('.').Config, routes: import('@sveltejs/kit').RouteDefinition<import('./index.js').Config>[] }>} */
 			const groups = new Map();
 
 			/** @type {Map<string, { hash: string, route_id: string }>} */
@@ -145,7 +145,7 @@ const plugin = function (defaults = {}) {
 			/** @type {Map<string, string>} */
 			const functions = new Map();
 
-			/** @type {Map<import('@sveltejs/kit').RouteDefinition<import('./index.js').Config>, { expiration: number | false, bypassToken: string | undefined, allowQuery: string[], group: number, passQuery: true }>} */
+			/** @type {Map<import('@sveltejs/kit').RouteDefinition<import('.').Config>, { expiration: number | false, bypassToken: string | undefined, allowQuery: string[], group: number, passQuery: true }>} */
 			const isr_config = new Map();
 
 			/** @type {Set<string>} */
@@ -378,11 +378,8 @@ function static_vercel_config(builder, config) {
 	/** @type {Record<string, { path: string }>} */
 	const overrides = {};
 
-	/** @type {import('./index.js').ImagesConfig | undefined} */
-	let images;
-	if (config.runtime !== 'edge') {
-		images = /** @type {import('./index.js').ServerlessConfig} */ (config).images;
-	}
+	/** @type {import('.').ImagesConfig} */
+	const images = config.images;
 
 	for (const [src, redirect] of builder.prerendered.redirects) {
 		prerendered_redirects.push({
@@ -438,7 +435,7 @@ function static_vercel_config(builder, config) {
  * @param {import('@sveltejs/kit').Builder} builder
  * @param {string} entry
  * @param {string} dir
- * @param {import('./index.js').ServerlessConfig} config
+ * @param {import('.').ServerlessConfig} config
  * @param {import('@sveltejs/kit').RouteDefinition[]} routes
  */
 async function create_function_bundle(builder, entry, dir, config, routes) {
@@ -550,19 +547,9 @@ async function create_function_bundle(builder, entry, dir, config, routes) {
 	);
 
 	// TODO: remove this check when @sveltejs/kit peer dep is bumped to 2.4+
-	if (builder.getServerAssets) {
-		const server_assets = builder.getServerAssets();
-		/** @type {Set<string>} */
-		let routes_assets = new Set(server_assets.rootErrorPage);
-
-		for (const route of routes) {
-			const assets = server_assets.routes.get(route.id);
-			if (assets) {
-				routes_assets = new Set([...routes_assets, ...assets]);
-			}
-		}
-
-		for (const asset of routes_assets) {
+	if (builder.generateServerAssetList) {
+		const server_assets = builder.generateServerAssetList(routes.map((r) => r.id));
+		for (const asset of server_assets) {
 			builder.copy(path.join(builder.getServerDirectory(), asset), path.join(dir, asset));
 		}
 	}

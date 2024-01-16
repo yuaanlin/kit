@@ -96,6 +96,12 @@ declare module '@sveltejs/kit' {
 		generateManifest(opts: { relativePath: string; routes?: RouteDefinition[] }): string;
 
 		/**
+		 * Get the asset paths imported by server-side code for the given routes.
+		 * @param routes a list of route IDs to get the server assets for
+		 */
+		generateServerAssetList(routes: string[]): string[];
+
+		/**
 		 * Resolve a path to the `name` directory inside `outDir`, e.g. `/path/to/.svelte-kit/my-adapter`.
 		 * @param name path to the file, relative to the build directory
 		 */
@@ -106,13 +112,6 @@ declare module '@sveltejs/kit' {
 		getServerDirectory(): string;
 		/** Get the application path including any configured `base` path, e.g. `my-base-path/_app`. */
 		getAppPath(): string;
-		/** Get the assets paths imported by server-side code for each route and the root [default error page](https://kit.svelte.dev/docs/routing#error). */
-		getServerAssets(): {
-			/** A map of route IDs and its array of assets paths imported by server-side code. */
-			routes: Map<string, string[]>;
-			/** An array of asset paths imported by the root [default error page](https://kit.svelte.dev/docs/routing#error). */
-			rootErrorPage: string[];
-		};
 
 		/**
 		 * Write client assets to `dest`.

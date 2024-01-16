@@ -74,11 +74,12 @@ export function create_builder({
 
 	/**
 	 * @type {{
-	 * 	routes: Map<string, string[]>;
-	 *  root_error_page: string[];
+	 *   routes: Map<string, Set<string>>;
+	 *   root_error_page: Set<string>;
+	 *   server_hooks: Set<string>;
 	 * } | undefined}
 	 */
-	let server_assets;
+	let server_asset_lookup;
 
 	return {
 		log,
@@ -198,127 +199,124 @@ export function create_builder({
 			return build_data.app_path;
 		},
 
-		getServerAssets() {
-			if (server_assets) {
-				return {
-					routes: server_assets.routes,
-					rootErrorPage: server_assets.root_error_page
+		generateServerAssetList(routes) {
+			if (!server_asset_lookup) {
+				/** @type {Set<string>} */
+				let asset_chunks = new Set();
+
+				for (const [filename, meta] of Object.entries(build_data.server_manifest)) {
+					if (filename.startsWith('_') && meta.assets) {
+						asset_chunks = concat(asset_chunks, meta.assets);
+					}
+				}
+
+				/**
+				 * @param {string | undefined} filename
+				 * @returns {Set<string>}
+				 */
+				function get_server_assets(filename) {
+					if (!filename || !build_data.server_manifest[filename]) {
+						return /** @type {Set<string>} */ (new Set());
+					}
+					const { imports, assets } = build_data.server_manifest[filename];
+
+					/** @type {Set<string>} */
+					let server_assets = new Set();
+
+					if (imports) {
+						server_assets = concat(
+							server_assets,
+							imports.filter((file) => asset_chunks.has(file))
+						);
+					}
+
+					if (assets) {
+						server_assets = concat(server_assets, assets);
+					}
+
+					return server_assets;
+				}
+
+				/**
+				 * @param {{
+				 *   component?: string;
+				 *   server?: string;
+				 *   universal?: string;
+				 *   parent?: import('types').PageNode;
+				 * }} node
+				 * @returns
+				 */
+				function get_server_load_assets({ server, parent }) {
+					let server_assets = concat(
+						/** @type {Set<string>}*/ (new Set()),
+						get_server_assets(server)
+					);
+
+					if (parent) {
+						server_assets = concat(server_assets, get_server_load_assets(parent));
+					}
+
+					return server_assets;
+				}
+
+				/**
+				 * @returns {Set<string>}
+				 */
+				function get_root_error_page_assets() {
+					const route = route_data.find((route) => route.leaf);
+					if (!route || !route.leaf) {
+						return new Set();
+					}
+
+					/** @type {Set<string>} */
+					let assets = new Set();
+
+					let layout = route.leaf.parent;
+					while (layout) {
+						assets = concat(assets, get_server_load_assets(layout));
+						layout = layout.parent;
+					}
+
+					return assets;
+				}
+
+				const server_hooks_path = resolve_entry(config.kit.files.hooks.server)?.slice(
+					process.cwd().length + 1
+				);
+
+				server_asset_lookup = {
+					routes: new Map(),
+					root_error_page: get_root_error_page_assets(),
+					server_hooks: get_server_assets(server_hooks_path)
 				};
+
+				for (const route of route_data) {
+					/** @type {Set<string>} */
+					let server_assets = new Set();
+
+					if (route.leaf) {
+						server_assets = concat(server_assets, get_server_load_assets(route.leaf));
+					}
+
+					if (route.endpoint) {
+						server_assets = concat(server_assets, get_server_assets(route.endpoint.file));
+					}
+
+					server_asset_lookup.routes.set(route.id, server_assets);
+				}
 			}
 
 			/** @type {Set<string>} */
-			let asset_chunks = new Set();
-
-			for (const [filename, meta] of Object.entries(build_data.server_manifest)) {
-				if (filename.startsWith('_') && meta.assets) {
-					asset_chunks = concat(asset_chunks, meta.assets);
-				}
+			let server_assets = new Set([
+				...server_asset_lookup.root_error_page,
+				...server_asset_lookup.server_hooks
+			]);
+			for (const route of routes) {
+				const assets = server_asset_lookup.routes.get(route);
+				if (!assets) continue;
+				server_assets = concat(server_assets, assets);
 			}
-
-			/**
-			 * @param {string | undefined} filename
-			 * @returns {Set<string>}
-			 */
-			function get_server_assets(filename) {
-				if (!filename || !build_data.server_manifest[filename]) {
-					return /** @type {Set<string>} */ (new Set());
-				}
-				const { imports, assets } = build_data.server_manifest[filename];
-
-				/** @type {Set<string>} */
-				let server_assets = new Set();
-
-				if (imports) {
-					server_assets = concat(
-						server_assets,
-						imports.filter((file) => asset_chunks.has(file))
-					);
-				}
-
-				if (assets) {
-					server_assets = concat(server_assets, assets);
-				}
-
-				return server_assets;
-			}
-
-			/**
-			 * @param {{
-			 *   component?: string;
-			 *   server?: string;
-			 *   universal?: string;
-			 *   parent?: import('types').PageNode;
-			 * }} node
-			 * @returns
-			 */
-			function get_server_load_assets({ server, parent }) {
-				let server_assets = concat(
-					/** @type {Set<string>}*/ (new Set()),
-					get_server_assets(server)
-				);
-
-				if (parent) {
-					server_assets = concat(server_assets, get_server_load_assets(parent));
-				}
-
-				return server_assets;
-			}
-
-			/**
-			 * @returns {Set<string>}
-			 */
-			function get_root_error_page_assets() {
-				const route = route_data.find((route) => route.leaf);
-				if (!route || !route.leaf) {
-					return new Set();
-				}
-
-				/** @type {Set<string>} */
-				let assets = new Set();
-
-				let layout = route.leaf.parent;
-				while (layout) {
-					assets = concat(assets, get_server_load_assets(layout));
-					layout = layout.parent;
-				}
-
-				return assets;
-			}
-
-			const routes = new Map();
-
-			const server_hooks_path = resolve_entry(config.kit.files.hooks.server)?.slice(
-				process.cwd().length + 1
-			);
-			const root_error_page_assets = [
-				...get_root_error_page_assets(),
-				...get_server_assets(server_hooks_path)
-			];
-
-			for (const route of route_data) {
-				/** @type {Set<string>} */
-				let server_assets = new Set(root_error_page_assets);
-
-				if (route.leaf) {
-					server_assets = concat(server_assets, get_server_load_assets(route.leaf));
-				}
-
-				if (route.endpoint) {
-					server_assets = concat(server_assets, get_server_assets(route.endpoint.file));
-				}
-
-				routes.set(route.id, Array.from(server_assets));
-			}
-
-			server_assets = {
-				routes,
-				root_error_page: root_error_page_assets
-			};
-
-			return {
-				routes,
-				rootErrorPage: server_assets.root_error_page
-			};
+			return [...server_assets];
 		},
 
 		writeClient(dest) {
